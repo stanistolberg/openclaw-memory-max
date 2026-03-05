@@ -1,14 +1,18 @@
 import { registerReranker } from './reranker';
 import { registerWeighter } from './weighter';
 import { ensureSleepCycle } from './sleep-cycle';
+import { ensureUtilityColumn } from './db';
 
 const memoryMaxPlugin = {
     id: 'openclaw-memory-max',
     name: 'OpenClaw Memory Max (SotA Archive)',
-    description: 'The ultimate enterprise-grade memory enhancement suite for OpenClaw. Adds zero-cost Cross-Encoder Reranking, Strict Semantic YAML constraints, and the Nightly Sleep-Cycle API.',
+    description: 'The ultimate enterprise-grade memory enhancement suite for OpenClaw. Adds zero-cost Cross-Encoder Reranking, Strict Semantic YAML constraints, Utility-Weighted memories, and the Nightly Sleep-Cycle API.',
     configSchema: {},
     register(api: any) {
         console.log('[openclaw-memory-max] Initializing State-of-the-Art Memory Cluster...');
+
+        // 0. Ensure Utility Score Schema Exists
+        ensureUtilityColumn();
 
         // 1. Hook the Cross-Encoder Precision Search
         registerReranker(api);
