@@ -1,13 +1,26 @@
 {
   "name": "openclaw-memory-max",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "1.1.0",
+  "description": "SOTA Memory Suite for OpenClaw. Adds Utility-Weighted Retrieval, Active Context Compression, a Causal Knowledge Graph, Cross-Encoder Reranking, and Nightly Sleep-Cycle consolidation.",
+  "main": "src/index.ts",
+  "keywords": [
+    "openclaw",
+    "memory",
+    "ai",
+    "rag",
+    "knowledge-graph",
+    "context-compression"
+  ],
+  "author": "Stanislav Stolberg",
+  "license": "MIT",
+  "type": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "audit": "node -e \"const db=require('./node_modules/better-sqlite3')('/home/claw/.openclaw/memory/main.sqlite'); const cols=db.prepare('PRAGMA table_info(chunks)').all(); const hasUtility=cols.some(c=>c.name==='utility_score'); console.log('utility_score column present:', hasUtility); const graph=require('fs').existsSync('/home/claw/.openclaw/memory/causal_graph.json'); console.log('causal_graph.json present:', graph);\"",
+    "test": "echo 'Audit the live server using: npm run audit'"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "dependencies": {
+    "@xenova/transformers": "^2.17.2",
+    "better-sqlite3": "^9.6.0",
+    "yaml": "^2.4.1"
+  }
 }
