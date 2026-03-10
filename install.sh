@@ -1,24 +1,38 @@
 #!/bin/bash
-echo "🦞 Installing openclaw-memory-max..."
+set -e
 
-# 1. Ensure the user has OpenClaw running globally
-if ! command -v openclaw &> /dev/null
-then
-    echo "Error: 'openclaw' CLI could not be found. Please install OpenClaw globally first."
-    exit
+echo "Installing openclaw-memory-max v3.0.0..."
+
+# 1. Ensure OpenClaw is installed
+if ! command -v openclaw &> /dev/null; then
+    echo "Error: 'openclaw' CLI not found. Install OpenClaw first."
+    exit 1
 fi
 
-# 2. Get the expected OpenClaw Extension directory
+# 2. Clone or update
 EXT_DIR="${HOME}/.openclaw/extensions/openclaw-memory-max"
 
-# 3. Copy directory contents to the internal config tree
-mkdir -p "$EXT_DIR"
-cp -r src tsconfig.json package.json openclaw.plugin.json README.md "$EXT_DIR"
+if [ -d "$EXT_DIR/.git" ]; then
+    echo "Existing installation found — pulling latest..."
+    cd "$EXT_DIR"
+    git pull origin main
+else
+    echo "Cloning from GitHub..."
+    mkdir -p "$(dirname "$EXT_DIR")"
+    git clone https://github.com/stanistolberg/openclaw-memory-max "$EXT_DIR"
+    cd "$EXT_DIR"
+fi
 
-# 4. Install dependencies and build
-echo "Installing Node.js packages..."
-cd "$EXT_DIR" || exit
-npm install
+# 3. Install dependencies and build
+echo "Installing dependencies..."
+npm install --no-fund --no-audit
+echo "Building TypeScript..."
 npm run build
 
-echo "✅ Installation Complete! Please restart your OpenClaw Daemon / Server to load the extension."
+# 4. Enable the plugin (takes the exclusive memory slot)
+echo "Enabling plugin..."
+openclaw plugins enable openclaw-memory-max 2>/dev/null || true
+
+echo ""
+echo "openclaw-memory-max v3.0.0 installed successfully!"
+echo "Restart the gateway to load: systemctl --user restart openclaw-gateway"
