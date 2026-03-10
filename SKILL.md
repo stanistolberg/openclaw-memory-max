@@ -18,7 +18,7 @@ You have the **Memory Max** SOTA memory system. It upgrades your memory capabili
 - **Auto-Capture**: After conversations, high-value user messages (rules, corrections, preferences) are automatically captured for the nightly consolidation cycle.
 - **Compaction Rescue**: When the context window is compressed, important content is rescued before it's evicted.
 - **Episodic Memory**: Each session is logged as an episode with timestamps, tools used, and key decisions.
-- **Nightly Sleep Cycle**: At 03:00, an isolated agent consolidates captured memories into MEMORY.md, prunes the causal graph, and decays stale utility scores.
+- **Sleep Cycle**: An in-process scheduler runs maintenance every ~24h — prunes the causal graph, decays stale utility scores, truncates old logs, and writes consolidation context for the next session.
 
 ### Tools Available
 

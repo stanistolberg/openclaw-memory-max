@@ -1,8 +1,9 @@
-import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { pruneGraph } from './graph';
 import { readRecentEpisodes, truncateEpisodes } from './episodic';
+
+const TAG = '[openclaw-memory-max]';
 
 function getBaseDir(): string {
     return process.env.OPENCLAW_HOME || path.join(process.env.HOME || '/root', '.openclaw');
@@ -16,8 +17,12 @@ function getCapturedPath(): string {
     return path.join(getBaseDir(), 'memory', 'auto_captured.jsonl');
 }
 
+function getConsolidationPath(): string {
+    return path.join(getBaseDir(), 'memory', 'consolidation_context.md');
+}
+
 /** Decay utility scores for memories not accessed recently. */
-function decayUtilityScores(inactiveDays: number = 7, decayFactor: number = 0.99): number {
+function decayUtilityScores(decayFactor: number = 0.99): number {
     const scoresPath = getScoresPath();
     if (!fs.existsSync(scoresPath)) return 0;
 
@@ -25,13 +30,11 @@ function decayUtilityScores(inactiveDays: number = 7, decayFactor: number = 0.99
         const scores: Record<string, number> = JSON.parse(fs.readFileSync(scoresPath, 'utf8'));
         let decayed = 0;
 
-        // Simple global decay — in production, per-ID access tracking would be better
-        // but requires more storage. This is a reasonable approximation.
         for (const id of Object.keys(scores)) {
             const current = scores[id];
-            if (current !== 0.5) { // Only decay non-default scores
+            if (current !== 0.5) {
                 scores[id] = parseFloat((current * decayFactor).toFixed(4));
-                if (Math.abs(scores[id] - 0.5) < 0.01) scores[id] = 0.5; // Snap to default
+                if (Math.abs(scores[id] - 0.5) < 0.01) scores[id] = 0.5;
                 decayed++;
             }
         }
@@ -74,11 +77,10 @@ function truncateCaptures(days: number = 30): number {
     }
 }
 
-/** Build a summary of recent auto-captures and episodes for the sleep cycle agent. */
-function buildConsolidationContext(): string {
+/** Build a summary of recent auto-captures and episodes. */
+export function buildConsolidationContext(): string {
     const parts: string[] = [];
 
-    // Recent auto-captures (last 24h)
     const capturePath = getCapturedPath();
     if (fs.existsSync(capturePath)) {
         const cutoff = Date.now() - (24 * 60 * 60 * 1000);
@@ -97,7 +99,6 @@ function buildConsolidationContext(): string {
         }
     }
 
-    // Recent episodes (last 7 days)
     const episodes = readRecentEpisodes(7);
     if (episodes.length > 0) {
         const epSummaries = episodes.slice(-5).map(ep => {
@@ -110,69 +111,71 @@ function buildConsolidationContext(): string {
     return parts.join('\n\n');
 }
 
-export function ensureSleepCycle(): Promise<void> {
-    console.log('[openclaw-memory-max] Setting up Sleep-Cycle-Memory cron...');
-
-    const consolidationContext = buildConsolidationContext();
-    const contextSection = consolidationContext
-        ? `\n\n--- RECENT ACTIVITY (auto-injected by memory-max) ---\n${consolidationContext}\n--- END RECENT ACTIVITY ---`
-        : '';
-
-    const message = `You are the Autonomous Sleep Cycle Engine (memory-max v3.0). Execute these steps in order:
-
-1. Read yesterday's log file inside memory/YYYY-MM-DD.md using the bash tool or memory_get.
-2. Identify new rules, negative constraints, corrections, or high-signal parameters the user requested.${contextSection}
-3. Read the master MEMORY.md file.
-4. Synthesize new rules into MEMORY.md using bash or tools. Group them logically. Delete obsolete rules. Deduplicate.
-5. If any auto-captured items above contain important rules or corrections NOT already in MEMORY.md, add them.
-6. Terminate with NO_REPLY.`;
-
-    const command = `openclaw cron add \
-      --name "sleep-cycle-memory" \
-      --cron "0 3 * * *" \
-      --tz "Europe/Berlin" \
-      --session "isolated" \
-      --description "Nightly LTM consolidation engine installed by memory-max" \
-      --no-deliver \
-      --message ${JSON.stringify(message)}`;
-
-    return new Promise((resolve) => {
-        // Run maintenance tasks synchronously before setting up cron
-        try {
-            const graphResult = pruneGraph();
-            if (graphResult.removed > 0) {
-                console.log(`[openclaw-memory-max] Graph pruned: ${graphResult.removed} nodes removed, ${graphResult.remaining} remaining.`);
-            }
-
-            const decayed = decayUtilityScores();
-            if (decayed > 0) {
-                console.log(`[openclaw-memory-max] Utility decay applied to ${decayed} scores.`);
-            }
-
-            const capturesRemoved = truncateCaptures(30);
-            if (capturesRemoved > 0) {
-                console.log(`[openclaw-memory-max] Truncated ${capturesRemoved} old auto-captures.`);
-            }
-
-            const episodesRemoved = truncateEpisodes(30);
-            if (episodesRemoved > 0) {
-                console.log(`[openclaw-memory-max] Truncated ${episodesRemoved} old episodes.`);
-            }
-        } catch (e: any) {
-            console.error('[openclaw-memory-max] Maintenance tasks failed:', e.message);
+/** Run all maintenance tasks: prune graph, decay scores, truncate old data. */
+function runMaintenance(): void {
+    try {
+        const graphResult = pruneGraph();
+        if (graphResult.removed > 0) {
+            console.log(`${TAG} Graph pruned: ${graphResult.removed} nodes removed, ${graphResult.remaining} remaining.`);
         }
 
-        exec(command, (error, _stdout, stderr) => {
-            if (error) {
-                if (stderr.includes('already exists')) {
-                    console.log('[openclaw-memory-max] Sleep Cycle cron already exists.');
-                } else {
-                    console.error('[openclaw-memory-max] Sleep Cycle cron setup failed:', error.message);
-                }
-            } else {
-                console.log('[openclaw-memory-max] Sleep Cycle cron created successfully.');
-            }
-            resolve();
-        });
-    });
+        const decayed = decayUtilityScores();
+        if (decayed > 0) {
+            console.log(`${TAG} Utility decay applied to ${decayed} scores.`);
+        }
+
+        const capturesRemoved = truncateCaptures(30);
+        if (capturesRemoved > 0) {
+            console.log(`${TAG} Truncated ${capturesRemoved} old auto-captures.`);
+        }
+
+        const episodesRemoved = truncateEpisodes(30);
+        if (episodesRemoved > 0) {
+            console.log(`${TAG} Truncated ${episodesRemoved} old episodes.`);
+        }
+
+        // Write consolidation context for the next agent session to pick up
+        const context = buildConsolidationContext();
+        if (context) {
+            const contextPath = getConsolidationPath();
+            const memDir = path.dirname(contextPath);
+            if (!fs.existsSync(memDir)) fs.mkdirSync(memDir, { recursive: true });
+            fs.writeFileSync(contextPath, `# Memory-Max Consolidation Context\n\nGenerated: ${new Date().toISOString()}\n\n${context}\n`);
+        }
+    } catch (e: any) {
+        console.error(`${TAG} Maintenance tasks failed:`, e.message);
+    }
+}
+
+/** Track last maintenance run to avoid running more than once per 20h. */
+let lastMaintenanceRun = 0;
+
+function runMaintenanceIfDue(): void {
+    const now = Date.now();
+    const twentyHours = 20 * 60 * 60 * 1000;
+    if (now - lastMaintenanceRun < twentyHours) return;
+    lastMaintenanceRun = now;
+    runMaintenance();
+}
+
+/**
+ * Initialize the sleep cycle system.
+ * Runs maintenance on startup + schedules a daily check via setInterval.
+ * No child_process — all maintenance runs in-process.
+ */
+export function ensureSleepCycle(): Promise<void> {
+    console.log(`${TAG} Initializing Sleep Cycle (in-process scheduler)...`);
+
+    // Run maintenance immediately on startup
+    runMaintenanceIfDue();
+
+    // Schedule periodic check — runs every 6 hours, but maintenance
+    // only actually executes once per 20 hours (dedup guard above)
+    const SIX_HOURS = 6 * 60 * 60 * 1000;
+    setInterval(() => {
+        runMaintenanceIfDue();
+    }, SIX_HOURS);
+
+    console.log(`${TAG} Sleep Cycle active (maintenance every ~24h, next check in 6h).`);
+    return Promise.resolve();
 }

@@ -141,15 +141,14 @@ rules:
 
 Only weight >= 1.0 rules get pinned. Everything else stays in normal retrieval.
 
-#### Nightly Sleep Cycle (03:00)
-A cron job that runs an isolated agent session to:
-1. Read yesterday's conversation logs
-2. Read `auto_captured.jsonl` entries from the past 24 hours
-3. Read `episodes.jsonl` for session summaries
-4. Synthesize new rules into `MEMORY.md` (dedup, group, clean up)
-5. **Prune the causal graph** — remove nodes older than 90 days with frequency=1, hard cap at 500 nodes
-6. **Decay utility scores** — multiply all scores by 0.99x, preventing stale high-scoring memories from dominating forever
-7. **Truncate logs** — remove auto-captures and episodes older than 30 days
+#### In-Process Sleep Cycle
+An in-process scheduler (no `child_process`, no shell exec) that runs maintenance every ~24 hours:
+1. **Prune the causal graph** — remove nodes older than 90 days with frequency=1, hard cap at 500 nodes
+2. **Decay utility scores** — multiply all scores by 0.99x, preventing stale high-scoring memories from dominating forever
+3. **Truncate logs** — remove auto-captures and episodes older than 30 days
+4. **Write consolidation context** — summarizes recent auto-captures and episodes to `consolidation_context.md` for the next agent session to reference
+
+The scheduler checks every 6 hours but only runs maintenance once per 20-hour window (dedup guard). No external cron or shell commands needed — runs entirely within the plugin process.
 
 ## How It's Built
 
