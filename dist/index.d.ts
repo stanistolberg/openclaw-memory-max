@@ -1,3 +1,8 @@
+export interface MemoryMaxConfig {
+    enableRulePinning?: boolean;
+    enableAutoCapture?: boolean;
+    enableAutoRecall?: boolean;
+}
 declare const memoryMaxPlugin: {
     id: string;
     name: string;
@@ -5,7 +10,20 @@ declare const memoryMaxPlugin: {
     configSchema: {
         type: string;
         additionalProperties: boolean;
-        properties: {};
+        properties: {
+            enableRulePinning: {
+                type: string;
+                default: boolean;
+            };
+            enableAutoCapture: {
+                type: string;
+                default: boolean;
+            };
+            enableAutoRecall: {
+                type: string;
+                default: boolean;
+            };
+        };
     };
     register(api: any): void;
 };

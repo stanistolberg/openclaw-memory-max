@@ -114,10 +114,16 @@ function extractUserMessages(context) {
     }
     return messages.filter(m => m && m.length > 5);
 }
-// ── Hook Registration ───────────────────────────────────────────────────
-function registerHooks(api) {
+function registerHooks(api, config = {}) {
+    const enableAutoRecall = config.enableAutoRecall ?? true;
+    const enableAutoCapture = config.enableAutoCapture ?? true;
     // ── before_agent_start: Auto-Recall ──────────────────────────────────
+    if (!enableAutoRecall) {
+        console.log('[openclaw-memory-max] ⊘ Auto-Recall disabled (opt-in via config.enableAutoRecall).');
+    }
     api.on('before_agent_start', async (context) => {
+        if (!enableAutoRecall)
+            return;
         try {
             const userMessages = extractUserMessages(context);
             if (userMessages.length === 0)
@@ -176,7 +182,12 @@ function registerHooks(api) {
         }
     });
     // ── agent_end: Auto-Capture ──────────────────────────────────────────
+    if (!enableAutoCapture) {
+        console.log('[openclaw-memory-max] ⊘ Auto-Capture disabled (opt-in via config.enableAutoCapture).');
+    }
     api.on('agent_end', async (context) => {
+        if (!enableAutoCapture)
+            return;
         try {
             const userMessages = extractUserMessages(context);
             let captured = 0;
@@ -197,6 +208,8 @@ function registerHooks(api) {
     });
     // ── before_compaction: Memory Rescue ─────────────────────────────────
     api.on('before_compaction', async (context) => {
+        if (!enableAutoCapture)
+            return;
         try {
             const userMessages = extractUserMessages(context);
             let rescued = 0;
@@ -215,5 +228,6 @@ function registerHooks(api) {
             console.error(`${TAG} Compaction rescue failed:`, e.message);
         }
     });
-    console.log('[openclaw-memory-max] ✓ Lifecycle hooks registered (auto-recall, auto-capture, compaction-rescue).');
+    const active = [enableAutoRecall && 'auto-recall', enableAutoCapture && 'auto-capture', enableAutoCapture && 'compaction-rescue'].filter(Boolean).join(', ');
+    console.log(`[openclaw-memory-max] ✓ Lifecycle hooks registered (${active || 'all disabled'}).`);
 }
