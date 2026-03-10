@@ -1,4 +1,4 @@
-# openclaw-memory-max
+# openclaw-memory-max `v2.0.0`
 
 > **SOTA Memory Suite for OpenClaw** — State-of-the-art agentic memory upgrades, packaged as a single installable skillset.
 
@@ -74,6 +74,25 @@ src/
   db.ts           — Read-only SQLite access + utility score sidecar (sql.js / pure WASM)
   sleep-cycle.ts  — Nightly consolidation cron
 ```
+
+## Changelog
+
+### 2.0.0
+- **Breaking**: Migrated to current OpenClaw plugin API (`name`/`parameters`/`execute` with structured returns)
+- **Breaking**: Replaced native deps (`better-sqlite3`, `@xenova/transformers`) with pure-JS alternatives (`sql.js`, `@huggingface/transformers`) for `--ignore-scripts` compatibility
+- **Breaking**: Utility scores moved from `main.sqlite` column to plugin-owned sidecar (`utility_scores.json`) — eliminates concurrent-write data loss
+- Plugin is now read-only against OpenClaw's `main.sqlite`
+- Added `configSchema` to manifest (required by current OpenClaw loader)
+- Added TypeScript build step (`npm run build`)
+- Fixed template literal parse errors in `weighter.ts` and `sleep-cycle.ts`
+- Fixed YAML fence regex in weighter (was matching literal `\n`)
+- Fixed destructive `systemPrompt` overwrite — now uses managed-block merge
+- Fixed sleep-cycle false-positive logging
+- Compressor tool metadata now accurately reflects advisory behavior
+- `install.sh` copies plugin manifest and runs build
+
+### 1.1.0
+- Initial release
 
 ## License
 
