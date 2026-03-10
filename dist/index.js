@@ -23,22 +23,21 @@ const memoryMaxPlugin = {
     },
     register(api) {
         console.log('[openclaw-memory-max] Initializing SOTA Memory Cluster v3...');
-        // Read plugin config — try multiple paths (OpenClaw API varies by version)
-        let config = api.config || api.getConfig?.() || {};
-        // Fallback: read directly from openclaw.json if api didn't provide config
-        if (Object.keys(config).length === 0) {
-            try {
-                const fs = require('fs');
-                const path = require('path');
-                const baseDir = process.env.OPENCLAW_HOME || path.join(process.env.HOME || '/root', '.openclaw');
-                const configPath = path.join(baseDir, 'openclaw.json');
-                if (fs.existsSync(configPath)) {
-                    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-                    config = raw?.plugins?.entries?.['openclaw-memory-max']?.config || {};
-                }
+        // Read plugin config — merge from openclaw.json + api (api takes precedence)
+        let fileConfig = {};
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const baseDir = process.env.OPENCLAW_HOME || path.join(process.env.HOME || '/root', '.openclaw');
+            const configPath = path.join(baseDir, 'openclaw.json');
+            if (fs.existsSync(configPath)) {
+                const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                fileConfig = raw?.plugins?.entries?.['openclaw-memory-max']?.config || {};
             }
-            catch { /* fallback silently */ }
         }
+        catch { /* fallback silently */ }
+        const apiConfig = api.config || api.getConfig?.() || {};
+        const config = { ...fileConfig, ...apiConfig };
         const enableRulePinning = config.enableRulePinning ?? false;
         const enableAutoCapture = config.enableAutoCapture ?? true;
         const enableAutoRecall = config.enableAutoRecall ?? true;
