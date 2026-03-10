@@ -11,7 +11,7 @@ This plugin provides **5 layered memory systems** on top of the standard OpenCla
 | 1 | **Cross-Encoder Reranker** | ms-marco-MiniLM | Re-ranks retrieved memories by semantic precision |
 | 2 | **Semantic YAML Weighter** | N/A | Pins critical 1.0-weight rules from `MEMORY.md` into the system prompt |
 | 3 | **Utility-Weighted Retrieval** | MemRL / AgeMem | Scores memories by historical usefulness (`utility_score`), multiplied into the semantic search |
-| 4 | **Active Context Compression** | Focus | Agent autonomously compresses the oldest 50% of context into a dense summary when overloaded |
+| 4 | **Context Compression Hint** | Focus | Agent signals the runtime to compress context when the window is overloaded |
 | 5 | **Causal Knowledge Graph** | ActMem | Persistent `cause → action → effect` knowledge graph the agent reads/writes autonomously |
 
 Plus:
@@ -19,12 +19,12 @@ Plus:
 
 ## Tools Exposed to the Agent
 
-| Tool ID | Description |
+| Tool Name | Description |
 |---|---|
 | `precision_memory_search` | Cross-Encoder search with utility weighting |
 | `reward_memory_utility` | Increment a memory's utility score after it proved useful |
 | `penalize_memory_utility` | Decrement a memory's utility score after a hallucination |
-| `compress_context` | Agent compresses its own context window autonomously |
+| `compress_context` | Signal the runtime to compress context when overloaded |
 | `memory_graph_add` | Log a `cause → action → effect` causal chain |
 | `memory_graph_query` | Retrieve the top 5 most relevant past causal chains |
 | `memory_graph_summary` | Get a session digest of all learned causal knowledge |
@@ -37,7 +37,14 @@ cd ~/.openclaw/extensions
 git clone https://github.com/stanistolberg/openclaw-memory-max
 cd openclaw-memory-max
 npm install
+npm run build
 openclaw reload
+```
+
+Or use the install script:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/stanistolberg/openclaw-memory-max/main/install.sh | bash
 ```
 
 ## Audit After Installation
@@ -47,13 +54,13 @@ npm run audit
 ```
 
 This will verify:
-- ✅ `utility_score` column present in `main.sqlite`
-- ✅ `causal_graph.json` initialized in the memory store
+- ✅ `main.sqlite` present (OpenClaw's memory DB)
+- ✅ `utility_scores.json` present (plugin-owned sidecar for utility weighting)
+- ✅ `causal_graph.json` present (causal knowledge graph)
 
-## Upgrade Safety
+## Data Safety
 
-All database changes use **non-destructive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`** patterns.  
-Your existing memories are never modified, overwritten, or deleted.
+This plugin is **read-only** against OpenClaw's `main.sqlite`. It never writes to or modifies the core memory database. Utility scores are stored in a separate sidecar file (`utility_scores.json`) owned exclusively by this plugin.
 
 ## Structure
 
@@ -62,9 +69,9 @@ src/
   index.ts        — Plugin entrypoint (register all modules)
   reranker.ts     — Cross-Encoder + Utility math
   weighter.ts     — Semantic YAML rule pinner
-  compressor.ts   — Active context compression tool
+  compressor.ts   — Context compression hint tool
   graph.ts        — Causal Knowledge Graph (3 tools)
-  db.ts           — SQLite utility_score schema migration
+  db.ts           — Read-only SQLite access + utility score sidecar (sql.js / pure WASM)
   sleep-cycle.ts  — Nightly consolidation cron
 ```
 

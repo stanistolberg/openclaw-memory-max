@@ -1,125 +1,125 @@
-import path from 'path';
-import fs from 'fs';
-import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
-
-let _SQL: any = null;
-
-function getBaseDir(): string {
-    return process.env.OPENCLAW_HOME || path.join(process.env.HOME || '/root', '.openclaw');
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getUtilityScore = getUtilityScore;
+exports.ensureUtilityColumn = ensureUtilityColumn;
+exports.rewardMemory = rewardMemory;
+exports.queryChunks = queryChunks;
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const sql_js_1 = __importDefault(require("sql.js"));
+let _SQL = null;
+function getBaseDir() {
+    return process.env.OPENCLAW_HOME || path_1.default.join(process.env.HOME || '/root', '.openclaw');
 }
-
-function getDbPath(): string {
-    return path.join(getBaseDir(), 'memory', 'main.sqlite');
+function getDbPath() {
+    return path_1.default.join(getBaseDir(), 'memory', 'main.sqlite');
 }
-
-function getScoresPath(): string {
-    return path.join(getBaseDir(), 'memory', 'utility_scores.json');
+function getScoresPath() {
+    return path_1.default.join(getBaseDir(), 'memory', 'utility_scores.json');
 }
-
 async function getSqlJs() {
-    if (!_SQL) _SQL = await initSqlJs();
+    if (!_SQL)
+        _SQL = await (0, sql_js_1.default)();
     return _SQL;
 }
-
 // ── Read-only access to OpenClaw's main.sqlite ──────────────────────────
-
 /** Open a read-only snapshot. Caller must close(). */
-async function openDb(): Promise<SqlJsDatabase | null> {
+async function openDb() {
     const SQL = await getSqlJs();
     const dbPath = getDbPath();
-    if (!fs.existsSync(dbPath)) return null;
-    const buffer = fs.readFileSync(dbPath);
+    if (!fs_1.default.existsSync(dbPath))
+        return null;
+    const buffer = fs_1.default.readFileSync(dbPath);
     return new SQL.Database(buffer);
 }
-
-function queryAll(db: SqlJsDatabase, sql: string, params?: any[]): any[] {
+function queryAll(db, sql, params) {
     const stmt = db.prepare(sql);
-    if (params) stmt.bind(params);
-    const rows: any[] = [];
+    if (params)
+        stmt.bind(params);
+    const rows = [];
     while (stmt.step()) {
         rows.push(stmt.getAsObject());
     }
     stmt.free();
     return rows;
 }
-
-// ── Plugin-owned utility scores (JSON sidecar) ─────────────────────────
-
-type ScoreMap = Record<string, number>;
-
-function loadScores(): ScoreMap {
+function loadScores() {
     const p = getScoresPath();
-    if (!fs.existsSync(p)) return {};
+    if (!fs_1.default.existsSync(p))
+        return {};
     try {
-        return JSON.parse(fs.readFileSync(p, 'utf8'));
-    } catch {
+        return JSON.parse(fs_1.default.readFileSync(p, 'utf8'));
+    }
+    catch {
         return {};
     }
 }
-
-function saveScores(scores: ScoreMap): void {
+function saveScores(scores) {
     const p = getScoresPath();
-    const dir = path.dirname(p);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(p, JSON.stringify(scores, null, 2));
+    const dir = path_1.default.dirname(p);
+    if (!fs_1.default.existsSync(dir))
+        fs_1.default.mkdirSync(dir, { recursive: true });
+    fs_1.default.writeFileSync(p, JSON.stringify(scores, null, 2));
 }
-
 /** Get utility score for a memory ID (default 0.5). */
-export function getUtilityScore(id: string): number {
+function getUtilityScore(id) {
     const scores = loadScores();
     return scores[id] !== undefined ? scores[id] : 0.5;
 }
-
 // ── Public API ──────────────────────────────────────────────────────────
-
 /** One-time schema check — read-only, no writes to main.sqlite. */
-export async function ensureUtilityColumn() {
+async function ensureUtilityColumn() {
     const db = await openDb();
     if (!db) {
         console.log('[openclaw-memory-max][db] DB file not found. Awaiting context instantiation.');
         return;
     }
-
     try {
         const tables = queryAll(db, "SELECT name FROM sqlite_master WHERE type='table'");
-        console.log('[openclaw-memory-max][db] Auditing tables:', tables.map((t: any) => t.name).join(', '));
-
-        const hasChunks = tables.some((t: any) => t.name === 'chunks');
+        console.log('[openclaw-memory-max][db] Auditing tables:', tables.map((t) => t.name).join(', '));
+        const hasChunks = tables.some((t) => t.name === 'chunks');
         if (hasChunks) {
             console.log('[openclaw-memory-max][db] Memory table found. Utility scores stored in sidecar file.');
-        } else {
+        }
+        else {
             console.log('[openclaw-memory-max][db] Memory table not found. Awaiting context instantiation.');
         }
-
         db.close();
-    } catch (e: any) {
+    }
+    catch (e) {
         db.close();
         console.error('[openclaw-memory-max][db] SQLite Audit Failed:', e.message);
     }
 }
-
 /** Update utility score in the sidecar file. Validates the ID exists in main.sqlite first. */
-export async function rewardMemory(id: string, scalar: number = 0.1): Promise<boolean> {
+async function rewardMemory(id, scalar = 0.1) {
     try {
         // Verify the memory ID actually exists in main.sqlite
         const db = await openDb();
-        if (!db) return false;
-
+        if (!db)
+            return false;
         let found = false;
         try {
             const tables = queryAll(db, "SELECT name FROM sqlite_master WHERE type='table'");
             const targets = ['chunks', 'memories', 'documents', 'episodic_memory'];
             for (const tbl of targets) {
-                if (!tables.some((t: any) => t.name === tbl)) continue;
+                if (!tables.some((t) => t.name === tbl))
+                    continue;
                 const rows = queryAll(db, `SELECT 1 FROM ${tbl} WHERE id = ? LIMIT 1`, [id]);
-                if (rows.length > 0) { found = true; break; }
+                if (rows.length > 0) {
+                    found = true;
+                    break;
+                }
             }
-        } finally {
+        }
+        finally {
             db.close();
         }
-
-        if (!found) return false;
-
+        if (!found)
+            return false;
         const scores = loadScores();
         const current = scores[id] !== undefined ? scores[id] : 0.5;
         const updated = Math.max(0.0, Math.min(1.0, current + scalar));
@@ -127,36 +127,35 @@ export async function rewardMemory(id: string, scalar: number = 0.1): Promise<bo
         saveScores(scores);
         console.log(`[openclaw-memory-max][db] Updated utility for ${id}: ${current.toFixed(2)} → ${updated.toFixed(2)}`);
         return true;
-    } catch (e: any) {
+    }
+    catch (e) {
         console.error('[openclaw-memory-max][db] Failed to update utility score:', e.message);
         return false;
     }
 }
-
 /** Query chunks table — read-only from main.sqlite, enriched with sidecar scores. */
-export async function queryChunks(limit: number = 100): Promise<any[]> {
+async function queryChunks(limit = 100) {
     const db = await openDb();
-    if (!db) return [];
-
+    if (!db)
+        return [];
     try {
         const tables = queryAll(db, "SELECT name FROM sqlite_master WHERE type='table'");
-        const hasChunks = tables.some((t: any) => t.name === 'chunks');
+        const hasChunks = tables.some((t) => t.name === 'chunks');
         if (!hasChunks) {
             db.close();
             return [];
         }
         const rows = queryAll(db, `SELECT * FROM chunks ORDER BY rowid DESC LIMIT ?`, [limit]);
         db.close();
-
         // Enrich with sidecar utility scores
         const scores = loadScores();
         for (const row of rows) {
             const id = row.id || row.rowid || '';
             row.utility_score = scores[id] !== undefined ? scores[id] : 0.5;
         }
-
         return rows;
-    } catch (e: any) {
+    }
+    catch (e) {
         db.close();
         console.error('[openclaw-memory-max][db] Failed to query chunks:', e.message);
         return [];

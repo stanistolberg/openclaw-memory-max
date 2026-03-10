@@ -1,63 +1,49 @@
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
-
-interface CausalNode {
-    id: string;
-    cause: string;
-    action: string;
-    effect: string;
-    outcome: 'success' | 'failure' | 'unknown';
-    timestamp: number;
-    tags: string[];
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.registerCausalGraph = registerCausalGraph;
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const crypto_1 = __importDefault(require("crypto"));
+function getGraphPath() {
+    const baseDir = process.env.OPENCLAW_HOME || path_1.default.join(process.env.HOME || '/root', '.openclaw');
+    return path_1.default.join(baseDir, 'memory', 'causal_graph.json');
 }
-
-interface CausalGraph {
-    version: string;
-    nodes: CausalNode[];
-}
-
-function getGraphPath(): string {
-    const baseDir = process.env.OPENCLAW_HOME || path.join(process.env.HOME || '/root', '.openclaw');
-    return path.join(baseDir, 'memory', 'causal_graph.json');
-}
-
-function loadGraph(): CausalGraph {
+function loadGraph() {
     const gPath = getGraphPath();
-    if (!fs.existsSync(gPath)) {
+    if (!fs_1.default.existsSync(gPath)) {
         return { version: '1.0.0', nodes: [] };
     }
     try {
-        return JSON.parse(fs.readFileSync(gPath, 'utf8'));
-    } catch {
+        return JSON.parse(fs_1.default.readFileSync(gPath, 'utf8'));
+    }
+    catch {
         return { version: '1.0.0', nodes: [] };
     }
 }
-
-function saveGraph(graph: CausalGraph): void {
+function saveGraph(graph) {
     const gPath = getGraphPath();
-    const dir = path.dirname(gPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(gPath, JSON.stringify(graph, null, 2));
+    const dir = path_1.default.dirname(gPath);
+    if (!fs_1.default.existsSync(dir))
+        fs_1.default.mkdirSync(dir, { recursive: true });
+    fs_1.default.writeFileSync(gPath, JSON.stringify(graph, null, 2));
 }
-
-function textSimilarity(a: string, b: string): number {
+function textSimilarity(a, b) {
     const tokensA = new Set(a.toLowerCase().split(/\W+/).filter(Boolean));
     const tokensB = new Set(b.toLowerCase().split(/\W+/).filter(Boolean));
     const intersection = [...tokensA].filter(t => tokensB.has(t)).length;
     const union = new Set([...tokensA, ...tokensB]).size;
     return union === 0 ? 0 : intersection / union;
 }
-
-function jsonResult(payload: any) {
+function jsonResult(payload) {
     return {
-        content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
+        content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
         details: payload
     };
 }
-
-export function registerCausalGraph(api: any) {
-
+function registerCausalGraph(api) {
     // Tool 1: Log a causal chain
     api.registerTool({
         name: 'memory_graph_add',
@@ -73,10 +59,10 @@ export function registerCausalGraph(api: any) {
             },
             required: ['cause', 'action', 'effect', 'outcome']
         },
-        async execute(_toolCallId: string, args: any) {
+        async execute(_toolCallId, args) {
             const graph = loadGraph();
-            const node: CausalNode = {
-                id: crypto.randomUUID(),
+            const node = {
+                id: crypto_1.default.randomUUID(),
                 cause: args.cause,
                 action: args.action,
                 effect: args.effect,
@@ -89,7 +75,6 @@ export function registerCausalGraph(api: any) {
             return jsonResult({ status: 'stored', id: node.id, total: graph.nodes.length });
         }
     });
-
     // Tool 2: Query for similar causal chains
     api.registerTool({
         name: 'memory_graph_query',
@@ -102,29 +87,23 @@ export function registerCausalGraph(api: any) {
             },
             required: ['query']
         },
-        async execute(_toolCallId: string, args: any) {
+        async execute(_toolCallId, args) {
             const graph = loadGraph();
-
             if (graph.nodes.length === 0) {
                 return jsonResult({ status: 'empty', message: 'No causal memory nodes yet.' });
             }
-
             const outcomeFilter = args.outcomeFilter || 'all';
-
             let candidates = graph.nodes;
             if (outcomeFilter !== 'all') {
                 candidates = candidates.filter(n => n.outcome === outcomeFilter);
             }
-
             const scored = candidates.map(node => {
                 const text = `${node.cause} ${node.action} ${node.effect}`;
                 const score = textSimilarity(args.query, text);
                 return { score, node };
             });
-
             scored.sort((a, b) => b.score - a.score);
             const top5 = scored.slice(0, 5);
-
             return jsonResult({
                 status: 'results',
                 total_in_db: graph.nodes.length,
@@ -140,29 +119,25 @@ export function registerCausalGraph(api: any) {
             });
         }
     });
-
     // Tool 3: Get a full summary of everything the agent has learned
     api.registerTool({
         name: 'memory_graph_summary',
         description: 'Returns a digest of all learned causal chains, grouped by outcome. Useful for self-auditing or bootstrapping context at the start of a session.',
         parameters: { type: 'object', properties: {} },
-        async execute(_toolCallId: string, _args: any) {
+        async execute(_toolCallId, _args) {
             const graph = loadGraph();
             const total = graph.nodes.length;
             const successes = graph.nodes.filter(n => n.outcome === 'success').length;
             const failures = graph.nodes.filter(n => n.outcome === 'failure').length;
             const unknown = graph.nodes.filter(n => n.outcome === 'unknown').length;
-
             const recentSuccesses = graph.nodes
                 .filter(n => n.outcome === 'success')
                 .slice(-3)
                 .map(n => `• [${n.tags.join(', ') || 'general'}] ${n.action} → ${n.effect}`);
-
             const recentFailures = graph.nodes
                 .filter(n => n.outcome === 'failure')
                 .slice(-3)
                 .map(n => `• [${n.tags.join(', ') || 'general'}] ${n.action} → ${n.effect}`);
-
             return jsonResult({
                 status: 'ok',
                 total,
@@ -174,6 +149,5 @@ export function registerCausalGraph(api: any) {
             });
         }
     });
-
     console.log('[openclaw-memory-max] Causal Knowledge Graph (3 tools) registered.');
 }
