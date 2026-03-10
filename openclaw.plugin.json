@@ -1,8 +1,8 @@
 {
     "id": "openclaw-memory-max",
     "name": "OpenClaw Memory Max",
-    "version": "2.0.0",
-    "description": "SOTA Memory Upgrades including Utility Vectors, Semantic 1.0 Hooks, and Nightly Sleep Cycle.",
+    "version": "3.0.0",
+    "description": "SOTA Memory Suite: Auto-Recall Hooks, Cross-Encoder Reranking, Multi-Hop Deep Search, Semantic Causal Graph, Episodic Memory, Utility Vectors, and Nightly Sleep-Cycle Consolidation.",
     "kind": "memory",
     "main": "dist/index.js",
     "configSchema": {

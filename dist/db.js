@@ -4,6 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUtilityScore = getUtilityScore;
+exports.searchChunksFTS = searchChunksFTS;
+exports.findSimilarChunks = findSimilarChunks;
 exports.ensureUtilityColumn = ensureUtilityColumn;
 exports.rewardMemory = rewardMemory;
 exports.queryChunks = queryChunks;
@@ -68,6 +70,73 @@ function saveScores(scores) {
 function getUtilityScore(id) {
     const scores = loadScores();
     return scores[id] !== undefined ? scores[id] : 0.5;
+}
+// ── FTS5 Pre-filter + Dedup ─────────────────────────────────────────────
+/** Fast BM25 pre-filter via FTS5. Falls back to keyword matching if FTS5 unavailable. */
+async function searchChunksFTS(query, limit = 20) {
+    const db = await openDb();
+    if (!db)
+        return [];
+    try {
+        const tables = queryAll(db, "SELECT name FROM sqlite_master WHERE type='table' OR type='virtual'");
+        const hasFTS = tables.some((t) => t.name === 'chunks_fts');
+        let rows;
+        if (hasFTS) {
+            // FTS5 MATCH — sanitize query for FTS syntax (wrap tokens in quotes)
+            const sanitized = query.replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean).map(t => `"${t}"`).join(' OR ');
+            if (!sanitized) {
+                db.close();
+                return [];
+            }
+            try {
+                rows = queryAll(db, `SELECT chunks_fts.id, chunks_fts.text, chunks_fts.path, chunks_fts.source, rank
+                    FROM chunks_fts
+                    WHERE chunks_fts MATCH ?
+                    ORDER BY rank
+                    LIMIT ?`, [sanitized, limit]);
+            }
+            catch {
+                // FTS5 might not be compiled into sql.js — fall back
+                rows = [];
+            }
+        }
+        else {
+            rows = [];
+        }
+        // Fallback: keyword pre-filter in JS if FTS5 unavailable or returned nothing
+        if (rows.length === 0) {
+            const allChunks = queryAll(db, `SELECT * FROM chunks ORDER BY rowid DESC LIMIT 200`);
+            const queryTokens = new Set(query.toLowerCase().split(/\W+/).filter(t => t.length > 2));
+            rows = allChunks.filter((row) => {
+                const text = (row.text || '').toLowerCase();
+                let matches = 0;
+                for (const token of queryTokens) {
+                    if (text.includes(token))
+                        matches++;
+                }
+                return matches >= Math.min(2, queryTokens.size);
+            }).slice(0, limit);
+        }
+        db.close();
+        // Enrich with utility scores
+        const scores = loadScores();
+        for (const row of rows) {
+            const id = row.id || row.rowid || '';
+            row.utility_score = scores[id] !== undefined ? scores[id] : 0.5;
+        }
+        return rows;
+    }
+    catch (e) {
+        db.close();
+        console.error('[openclaw-memory-max][db] FTS search failed:', e.message);
+        return [];
+    }
+}
+/** Check for duplicate content. Returns chunks with high text overlap. */
+async function findSimilarChunks(text, limit = 5) {
+    // Use FTS5 with the first ~50 words of the text as query
+    const queryText = text.split(/\s+/).slice(0, 50).join(' ');
+    return searchChunksFTS(queryText, limit);
 }
 // ── Public API ──────────────────────────────────────────────────────────
 /** One-time schema check — read-only, no writes to main.sqlite. */

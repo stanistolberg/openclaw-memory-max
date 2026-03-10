@@ -6,34 +6,40 @@ const sleep_cycle_1 = require("./sleep-cycle");
 const db_1 = require("./db");
 const compressor_1 = require("./compressor");
 const graph_1 = require("./graph");
+const hooks_1 = require("./hooks");
+const episodic_1 = require("./episodic");
 const memoryMaxPlugin = {
     id: 'openclaw-memory-max',
-    name: 'OpenClaw Memory Max (SotA Archive)',
-    description: 'SOTA Memory Suite: Cross-Encoder Reranking, Semantic YAML Weights, Utility-Weighted vectors, Active Context Compression, and a Causal Knowledge Graph.',
+    name: 'OpenClaw Memory Max (SotA)',
+    description: 'SOTA Memory Suite v3: Auto-Recall Hooks, Cross-Encoder Reranking, Multi-Hop Deep Search, Semantic Causal Graph with Dedup/Pruning, Episodic Session Memory, Utility-Weighted Vectors, YAML Rule Pinning, and Nightly Sleep-Cycle Consolidation.',
     configSchema: {
         type: 'object',
         additionalProperties: false,
         properties: {}
     },
     register(api) {
-        console.log('[openclaw-memory-max] Initializing State-of-the-Art Memory Cluster...');
+        console.log('[openclaw-memory-max] Initializing SOTA Memory Cluster v3...');
         // 0. Ensure Utility Score Schema Exists (async, fire-and-forget)
         (0, db_1.ensureUtilityColumn)().catch((e) => console.error('[openclaw-memory-max] Schema migration failed:', e.message));
-        // 1. Cross-Encoder Precision Search + Reward/Penalize Hooks
+        // 1. Cross-Encoder Precision Search + Deep Search + Reward/Penalize
         (0, reranker_1.registerReranker)(api);
-        console.log('[openclaw-memory-max] ✓ Precision Reranker (ONNX) active.');
+        console.log('[openclaw-memory-max] ✓ Precision Reranker + Deep Multi-Hop Search active.');
         // 2. Semantic 1.0 Strict Weight Tracker
         (0, weighter_1.registerWeighter)(api);
         console.log('[openclaw-memory-max] ✓ Semantic Rule Weighter watching MEMORY.md.');
-        // 3. Mid-Conversation Context Compressor
+        // 3. Context Compressor (wired to before_compaction rescue data)
         (0, compressor_1.registerCompressor)(api);
-        console.log('[openclaw-memory-max] ✓ Active Context Compressor registered.');
-        // 4. Causal Knowledge Graph (3 tools: add / query / summary)
+        console.log('[openclaw-memory-max] ✓ Context Compressor registered.');
+        // 4. Causal Knowledge Graph (semantic search, dedup, pruning)
         (0, graph_1.registerCausalGraph)(api);
-        console.log('[openclaw-memory-max] ✓ Causal Knowledge Graph live.');
-        // 5. Nightly Sleep-Cycle cron (async — logs its own status)
+        console.log('[openclaw-memory-max] ✓ Causal Knowledge Graph live (semantic + dedup).');
+        // 5. Lifecycle Hooks: auto-recall, auto-capture, compaction rescue
+        (0, hooks_1.registerHooks)(api);
+        // 6. Episodic Memory: session segmentation
+        (0, episodic_1.registerEpisodic)(api);
+        // 7. Nightly Sleep-Cycle cron + maintenance (async — logs its own status)
         (0, sleep_cycle_1.ensureSleepCycle)().catch((e) => console.error('[openclaw-memory-max] Sleep-Cycle setup failed:', e.message));
-        console.log('[openclaw-memory-max] All systems nominal. Zero-Hallucination Matrix ACTIVE.');
+        console.log('[openclaw-memory-max] All systems nominal. SOTA Memory Matrix ACTIVE.');
     }
 };
 exports.default = memoryMaxPlugin;

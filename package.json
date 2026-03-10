@@ -1,6 +1,6 @@
 {
   "name": "openclaw-memory-max",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "SOTA Memory Suite for OpenClaw. Adds Utility-Weighted Retrieval, Active Context Compression, a Causal Knowledge Graph, Cross-Encoder Reranking, and Nightly Sleep-Cycle consolidation.",
   "main": "dist/index.js",
   "keywords": [

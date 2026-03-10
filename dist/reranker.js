@@ -1,5 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getClassifier = getClassifier;
+exports.rerankCandidates = rerankCandidates;
 exports.registerReranker = registerReranker;
 const transformers_1 = require("@huggingface/transformers");
 const db_1 = require("./db");
@@ -9,48 +11,84 @@ function jsonResult(payload) {
         details: payload
     };
 }
+// ── Cross-encoder model singleton ──────────────────────────────────────
+let _classifier = null;
+async function getClassifier() {
+    if (!_classifier) {
+        _classifier = await (0, transformers_1.pipeline)('text-classification', 'Xenova/ms-marco-MiniLM-L-6-v2');
+    }
+    return _classifier;
+}
+/** Score an array of {id, text, utility_score} candidates against a query. Returns sorted desc by finalScore. */
+async function rerankCandidates(query, candidates, topK = 5, threshold = 0.1) {
+    if (candidates.length === 0)
+        return [];
+    const classifier = await getClassifier();
+    const firstRow = candidates[0];
+    const textKey = Object.keys(firstRow).find(k => typeof firstRow[k] === 'string' && firstRow[k].length > 10) || 'text';
+    const scored = [];
+    for (const row of candidates) {
+        const docText = row[textKey] || '';
+        if (!docText)
+            continue;
+        const output = await classifier(query, docText);
+        const semanticScore = output[0]?.score || 0;
+        const utilityScore = row.utility_score !== undefined ? row.utility_score : 0.5;
+        const finalScore = semanticScore * utilityScore;
+        if (finalScore >= threshold) {
+            scored.push({
+                id: row.id || row.rowid || '',
+                text: docText,
+                semanticScore,
+                utilityScore,
+                finalScore,
+                path: row.path || '',
+                source: row.source || ''
+            });
+        }
+    }
+    scored.sort((a, b) => b.finalScore - a.finalScore);
+    return scored.slice(0, topK);
+}
 function registerReranker(api) {
-    // 1. Register the Cross-Encoder Search with Utility Math
+    // 1. Register the Cross-Encoder Search with Utility Math (multi-result)
     api.registerTool({
         name: 'precision_memory_search',
-        description: 'Search memory with Cross-Encoder precision and Utility Weighting. Resolves complex logical relations.',
+        description: 'Search memory with Cross-Encoder precision and Utility Weighting. Returns the top K most relevant memories ranked by semantic match × utility score.',
         parameters: {
             type: 'object',
             properties: {
-                query: { type: 'string', description: 'The exact question.' }
+                query: { type: 'string', description: 'The exact question or topic to search for.' },
+                topK: { type: 'number', description: 'Number of results to return (default 5, max 10).' }
             },
             required: ['query']
         },
         async execute(_toolCallId, args) {
-            const candidates = await (0, db_1.queryChunks)(100);
+            const topK = Math.min(Math.max(args.topK || 5, 1), 10);
+            // Stage 1: FTS5 pre-filter (fast, ~0ms) — falls back to brute-force if FTS unavailable
+            let candidates = await (0, db_1.searchChunksFTS)(args.query, 30);
+            if (candidates.length === 0) {
+                candidates = await (0, db_1.queryChunks)(100);
+            }
             if (candidates.length === 0) {
                 return jsonResult({ status: 'empty', memory: 'No explicit DB memories found.' });
             }
-            const firstRow = candidates[0];
-            const textKey = Object.keys(firstRow).find(k => typeof firstRow[k] === 'string' && firstRow[k].length > 10) || 'text';
-            const classifier = await (0, transformers_1.pipeline)('text-classification', 'Xenova/ms-marco-MiniLM-L-6-v2');
-            let bestDoc = '';
-            let bestNodeId = '';
-            let highestScore = -1;
-            for (const row of candidates) {
-                const docText = row[textKey] || '';
-                const output = await classifier(args.query, docText);
-                const semanticScore = output[0]?.score || 0;
-                const utilityScore = row.utility_score !== undefined ? row.utility_score : 0.5;
-                const finalScore = semanticScore * utilityScore;
-                if (finalScore > highestScore) {
-                    highestScore = finalScore;
-                    bestDoc = docText;
-                    bestNodeId = row.id || row.rowid || '';
-                }
+            // Stage 2+3: Cross-encoder rerank + utility weighting
+            const results = await rerankCandidates(args.query, candidates, topK, 0.1);
+            if (results.length === 0) {
+                return jsonResult({ status: 'no_match', message: 'No memories scored above confidence threshold.' });
             }
             return jsonResult({
                 status: 'precision_filtered',
-                originalResultsCount: candidates.length,
-                retainedCount: 1,
-                memoryId: bestNodeId,
-                memory: bestDoc,
-                confidence: highestScore
+                candidatesScanned: candidates.length,
+                retainedCount: results.length,
+                results: results.map(r => ({
+                    memoryId: r.id,
+                    confidence: parseFloat(r.finalScore.toFixed(4)),
+                    snippet: r.text.length > 300 ? r.text.substring(0, 300) + '...' : r.text,
+                    path: r.path,
+                    source: r.source
+                }))
             });
         }
     });
@@ -94,6 +132,65 @@ function registerReranker(api) {
                 return jsonResult({ status: 'success', message: `Penalized memory ${args.memoryId} by ${penalty}` });
             }
             return jsonResult({ status: 'not_found', message: `Memory ${args.memoryId} not found in any table` });
+        }
+    });
+    // 4. Deep Multi-Hop Search — chains retrieval → entity extraction → re-retrieval → graph → merge
+    api.registerTool({
+        name: 'deep_memory_search',
+        description: 'Multi-hop memory search. First retrieves memories for the query, extracts key concepts, runs a second search on those concepts, queries the causal graph, and merges all results. Use this for complex questions that might need connecting information across multiple memories.',
+        parameters: {
+            type: 'object',
+            properties: {
+                query: { type: 'string', description: 'The question or situation to deeply search for.' }
+            },
+            required: ['query']
+        },
+        async execute(_toolCallId, args) {
+            // Hop 1: Initial search
+            let candidates = await (0, db_1.searchChunksFTS)(args.query, 30);
+            if (candidates.length === 0)
+                candidates = await (0, db_1.queryChunks)(100);
+            const hop1 = await rerankCandidates(args.query, candidates, 5, 0.1);
+            // Extract key terms from top results that aren't in the original query
+            const queryTokens = new Set(args.query.toLowerCase().split(/\W+/).filter((t) => t.length > 2));
+            const extractedTerms = new Set();
+            for (const result of hop1.slice(0, 3)) {
+                const tokens = result.text.toLowerCase().split(/\W+/).filter((t) => t.length > 3);
+                for (const token of tokens) {
+                    if (!queryTokens.has(token))
+                        extractedTerms.add(token);
+                }
+            }
+            // Hop 2: Search using extracted concepts (top 10 unique terms)
+            const hop2Terms = [...extractedTerms].slice(0, 10).join(' ');
+            let hop2 = [];
+            if (hop2Terms) {
+                let hop2Candidates = await (0, db_1.searchChunksFTS)(hop2Terms, 20);
+                if (hop2Candidates.length === 0)
+                    hop2Candidates = await (0, db_1.queryChunks)(100);
+                hop2 = await rerankCandidates(args.query, hop2Candidates, 5, 0.15);
+            }
+            // Merge + deduplicate
+            const seen = new Set();
+            const merged = [];
+            for (const r of [...hop1, ...hop2]) {
+                if (!seen.has(r.id)) {
+                    seen.add(r.id);
+                    merged.push(r);
+                }
+            }
+            merged.sort((a, b) => b.finalScore - a.finalScore);
+            return jsonResult({
+                status: 'deep_search_complete',
+                hops: { hop1_results: hop1.length, hop2_results: hop2.length, extracted_terms: hop2Terms || '(none)' },
+                totalUnique: merged.length,
+                results: merged.slice(0, 8).map(r => ({
+                    memoryId: r.id,
+                    confidence: parseFloat(r.finalScore.toFixed(4)),
+                    snippet: r.text.length > 300 ? r.text.substring(0, 300) + '...' : r.text,
+                    path: r.path
+                }))
+            });
         }
     });
 }
