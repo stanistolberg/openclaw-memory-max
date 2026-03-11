@@ -60,10 +60,10 @@ const memoryMaxPlugin = {
         registerReranker(api);
         console.log('[openclaw-memory-max] ✓ Precision Reranker + Deep Multi-Hop Search active.');
 
-        // 2. Semantic 1.0 Strict Weight Tracker (opt-in only)
+        // 2. Rule Weighter (read-only — parses MEMORY.md YAML, never writes to global config)
+        registerWeighter(api);
         if (enableRulePinning) {
-            registerWeighter(api);
-            console.log('[openclaw-memory-max] ✓ Semantic Rule Weighter watching MEMORY.md (opted in).');
+            console.log('[openclaw-memory-max] ✓ Rule Pinning active (injected via hook, not global config).');
         } else {
             console.log('[openclaw-memory-max] ⊘ Rule Pinning disabled (opt-in via config.enableRulePinning).');
         }
@@ -77,7 +77,7 @@ const memoryMaxPlugin = {
         console.log('[openclaw-memory-max] ✓ Causal Knowledge Graph live (semantic + dedup).');
 
         // 5. Lifecycle Hooks: auto-recall, auto-capture, compaction rescue
-        registerHooks(api, { enableAutoCapture, enableAutoRecall });
+        registerHooks(api, { enableAutoCapture, enableAutoRecall, enableRulePinning });
 
         // 6. Episodic Memory: session segmentation
         registerEpisodic(api);

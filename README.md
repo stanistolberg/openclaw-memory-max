@@ -1,4 +1,4 @@
-# openclaw-memory-max `v3.0.2`
+# openclaw-memory-max `v3.0.3`
 
 > **SOTA Memory Suite for OpenClaw** — Turn your lobster into an agent that actually learns from experience, recalls relevant context automatically, and never forgets what matters.
 

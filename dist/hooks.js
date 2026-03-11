@@ -9,6 +9,7 @@ const path_1 = __importDefault(require("path"));
 const db_1 = require("./db");
 const reranker_1 = require("./reranker");
 const graph_1 = require("./graph");
+const weighter_1 = require("./weighter");
 const TAG = '[openclaw-memory-max][hooks]';
 function getBaseDir() {
     return process.env.OPENCLAW_HOME || path_1.default.join(process.env.HOME || '/root', '.openclaw');
@@ -117,6 +118,7 @@ function extractUserMessages(context) {
 function registerHooks(api, config = {}) {
     const enableAutoRecall = config.enableAutoRecall ?? true;
     const enableAutoCapture = config.enableAutoCapture ?? false;
+    const enableRulePinning = config.enableRulePinning ?? false;
     // ── before_agent_start: Auto-Recall ──────────────────────────────────
     if (!enableAutoRecall) {
         console.log('[openclaw-memory-max] ⊘ Auto-Recall disabled (opt-in via config.enableAutoRecall).');
@@ -164,7 +166,12 @@ function registerHooks(api, config = {}) {
                     break;
             }
             memoriesXml += '</relevant-memories>';
-            const injection = memoriesXml + experienceXml;
+            // Stage 4: Pinned rules (opt-in only)
+            let pinnedXml = '';
+            if (enableRulePinning) {
+                pinnedXml = (0, weighter_1.buildPinnedRulesXml)();
+            }
+            const injection = memoriesXml + experienceXml + pinnedXml;
             // Inject into context — OpenClaw supports systemPrompt prepend or context injection
             if (context.addSystemContent) {
                 context.addSystemContent(injection);
@@ -175,7 +182,7 @@ function registerHooks(api, config = {}) {
             else if (context.prependMessages) {
                 context.prependMessages([{ role: 'system', content: injection }]);
             }
-            console.log(`${TAG} Auto-recall: injected ${ranked.length} memories + ${experienceXml ? 'experience' : 'no experience'}`);
+            console.log(`${TAG} Auto-recall: injected ${ranked.length} memories + ${experienceXml ? 'experience' : 'no experience'}${pinnedXml ? ' + pinned rules' : ''}`);
         }
         catch (e) {
             console.error(`${TAG} Auto-recall failed:`, e.message);

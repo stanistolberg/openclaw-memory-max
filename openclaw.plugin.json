@@ -1,7 +1,7 @@
 {
     "id": "openclaw-memory-max",
     "name": "OpenClaw Memory Max",
-    "version": "3.0.2",
+    "version": "3.0.3",
     "description": "SOTA Memory Suite: Auto-Recall Hooks, Cross-Encoder Reranking, Multi-Hop Deep Search, Semantic Causal Graph, Episodic Memory, Utility Vectors, and Nightly Sleep-Cycle Consolidation.",
     "kind": "memory",
     "main": "dist/index.js",
@@ -48,7 +48,8 @@
     },
     "privacy": {
         "storesUserMessages": "opt-in (enableAutoCapture=false by default)",
-        "modifiesSystemPrompt": "auto-recall injects <relevant-memories> from the user's own memory DB; rule pinning is opt-in (enableRulePinning=false by default)",
+        "modifiesSystemPrompt": "auto-recall injects <relevant-memories> into session context via hook (not global config); rule pinning is opt-in (enableRulePinning=false by default) and also injected via hook only",
+        "modifiesGlobalConfig": false,
         "externalNetworkAccess": false,
         "dataRetention": "sidecar files auto-truncated after 30 days by in-process sleep cycle"
     }

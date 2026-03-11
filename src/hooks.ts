@@ -3,6 +3,7 @@ import path from 'path';
 import { searchChunksFTS, findSimilarChunks } from './db';
 import { rerankCandidates } from './reranker';
 import { queryGraphForHook } from './graph';
+import { buildPinnedRulesXml } from './weighter';
 
 const TAG = '[openclaw-memory-max][hooks]';
 
@@ -120,11 +121,13 @@ function extractUserMessages(context: any): string[] {
 export interface HooksConfig {
     enableAutoCapture?: boolean;
     enableAutoRecall?: boolean;
+    enableRulePinning?: boolean;
 }
 
 export function registerHooks(api: any, config: HooksConfig = {}) {
     const enableAutoRecall = config.enableAutoRecall ?? true;
     const enableAutoCapture = config.enableAutoCapture ?? false;
+    const enableRulePinning = config.enableRulePinning ?? false;
 
     // ── before_agent_start: Auto-Recall ──────────────────────────────────
     if (!enableAutoRecall) {
@@ -173,7 +176,13 @@ export function registerHooks(api: any, config: HooksConfig = {}) {
             }
             memoriesXml += '</relevant-memories>';
 
-            const injection = memoriesXml + experienceXml;
+            // Stage 4: Pinned rules (opt-in only)
+            let pinnedXml = '';
+            if (enableRulePinning) {
+                pinnedXml = buildPinnedRulesXml();
+            }
+
+            const injection = memoriesXml + experienceXml + pinnedXml;
 
             // Inject into context — OpenClaw supports systemPrompt prepend or context injection
             if (context.addSystemContent) {
@@ -184,7 +193,7 @@ export function registerHooks(api: any, config: HooksConfig = {}) {
                 context.prependMessages([{ role: 'system', content: injection }]);
             }
 
-            console.log(`${TAG} Auto-recall: injected ${ranked.length} memories + ${experienceXml ? 'experience' : 'no experience'}`);
+            console.log(`${TAG} Auto-recall: injected ${ranked.length} memories + ${experienceXml ? 'experience' : 'no experience'}${pinnedXml ? ' + pinned rules' : ''}`);
         } catch (e: any) {
             console.error(`${TAG} Auto-recall failed:`, e.message);
         }
