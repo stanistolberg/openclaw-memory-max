@@ -124,7 +124,7 @@ export interface HooksConfig {
 
 export function registerHooks(api: any, config: HooksConfig = {}) {
     const enableAutoRecall = config.enableAutoRecall ?? true;
-    const enableAutoCapture = config.enableAutoCapture ?? true;
+    const enableAutoCapture = config.enableAutoCapture ?? false;
 
     // ── before_agent_start: Auto-Recall ──────────────────────────────────
     if (!enableAutoRecall) {

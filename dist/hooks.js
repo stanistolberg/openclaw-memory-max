@@ -116,7 +116,7 @@ function extractUserMessages(context) {
 }
 function registerHooks(api, config = {}) {
     const enableAutoRecall = config.enableAutoRecall ?? true;
-    const enableAutoCapture = config.enableAutoCapture ?? true;
+    const enableAutoCapture = config.enableAutoCapture ?? false;
     // ── before_agent_start: Auto-Recall ──────────────────────────────────
     if (!enableAutoRecall) {
         console.log('[openclaw-memory-max] ⊘ Auto-Recall disabled (opt-in via config.enableAutoRecall).');

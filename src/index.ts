@@ -22,7 +22,7 @@ const memoryMaxPlugin = {
         additionalProperties: false,
         properties: {
             enableRulePinning: { type: 'boolean', default: false },
-            enableAutoCapture: { type: 'boolean', default: true },
+            enableAutoCapture: { type: 'boolean', default: false },
             enableAutoRecall: { type: 'boolean', default: true }
         }
     },
@@ -46,7 +46,7 @@ const memoryMaxPlugin = {
         const config: MemoryMaxConfig = { ...fileConfig, ...apiConfig };
 
         const enableRulePinning = config.enableRulePinning ?? false;
-        const enableAutoCapture = config.enableAutoCapture ?? true;
+        const enableAutoCapture = config.enableAutoCapture ?? false;
         const enableAutoRecall = config.enableAutoRecall ?? true;
 
         console.log(`[openclaw-memory-max] Config: rulePinning=${enableRulePinning}, autoCapture=${enableAutoCapture}, autoRecall=${enableAutoRecall}`);

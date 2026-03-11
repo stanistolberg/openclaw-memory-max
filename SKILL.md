@@ -93,7 +93,7 @@ All features are controlled via `configSchema` in the plugin manifest. Users con
 | Option | Default | Description |
 |---|---|---|
 | `enableRulePinning` | `false` | YAML rule pinning from MEMORY.md into system prompt. **Off by default** — must be explicitly opted in. |
-| `enableAutoCapture` | `true` | Automatic capture of high-value user messages to sidecar files. |
+| `enableAutoCapture` | `false` | Automatic capture of high-value user messages to sidecar files. **Off by default** — opt in if you want persistent message logging. |
 | `enableAutoRecall` | `true` | Automatic memory injection before each agent turn. |
 
 ## YAML Rule Pinning (opt-in)
