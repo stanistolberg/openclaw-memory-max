@@ -1,4 +1,4 @@
-# openclaw-memory-max `v3.0.0`
+# openclaw-memory-max `v3.0.2`
 
 > **SOTA Memory Suite for OpenClaw** — Turn your lobster into an agent that actually learns from experience, recalls relevant context automatically, and never forgets what matters.
 
@@ -193,12 +193,6 @@ npm install
 npm run build
 openclaw plugins enable openclaw-memory-max
 # Restart the gateway to load the plugin
-```
-
-Or use the install script:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/stanistolberg/openclaw-memory-max/main/install.sh | bash
 ```
 
 The plugin declares `kind: "memory"` which means it takes the exclusive memory slot. Enabling it automatically disables `memory-core` and `memory-lancedb`.
